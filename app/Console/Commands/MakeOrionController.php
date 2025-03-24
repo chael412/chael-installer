@@ -5,11 +5,12 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Process;
 
 class MakeOrionController extends Command
 {
     protected $signature = 'make:orion {name}';
-    protected $description = 'Generate a new Orion controller and its model if not exists';
+    protected $description = 'Generate a new Orion controller, model, and migration if not exists';
 
     public function handle()
     {
@@ -28,7 +29,7 @@ class MakeOrionController extends Command
 
         // Define namespace dynamically
         $namespace = "App\\Http\\Controllers\\Orion";
-        $namespace = rtrim($namespace, '\\'); // Remove trailing slash if root
+        $namespace = rtrim($namespace, '\\');
 
         // Orion controller template
         $controllerStub = <<<PHP
@@ -81,6 +82,55 @@ class MakeOrionController extends Command
             $this->info("✅ Model already exists: app/Models/{$modelName}.php");
         }
 
+        // **Create Migration (Check by Name, Ignore Timestamp)**
+        $tableName = Str::plural(Str::snake($modelName));
+        $migrationName = "create_{$tableName}_table";
+
+        // Check if migration with the same name (ignoring timestamp) already exists
+        $migrationPath = database_path('migrations');
+        $existingMigrations = collect(File::files($migrationPath))
+            ->filter(fn($file) => Str::contains($file->getFilename(), $migrationName))
+            ->count();
+
+        $migrationCreated = false;
+
+        if ($existingMigrations === 0) {
+            $timestamp = now()->format('Y_m_d_His');
+            $fullMigrationName = "{$timestamp}_{$migrationName}.php";
+            $fullMigrationPath = $migrationPath . "/{$fullMigrationName}";
+
+            $migrationStub = <<<PHP
+            <?php
+
+            use Illuminate\Database\Migrations\Migration;
+            use Illuminate\Database\Schema\Blueprint;
+            use Illuminate\Support\Facades\Schema;
+
+            return new class extends Migration
+            {
+                public function up(): void
+                {
+                    Schema::create('{$tableName}', function (Blueprint \$table) {
+                        \$table->id();
+                        \$table->timestamps();
+                    });
+                }
+
+                public function down(): void
+                {
+                    Schema::dropIfExists('{$tableName}');
+                }
+            };
+            PHP;
+
+            // Create the migration file
+            File::put($fullMigrationPath, $migrationStub);
+            $this->info("✅ Migration created: database/migrations/{$fullMigrationName}");
+            $migrationCreated = true;
+        } else {
+            $this->info("✅ Migration for '{$tableName}' already exists.");
+        }
+
         // **Add Route to api.php**
         $routePath = base_path('routes/api.php');
         $routeName = Str::plural(Str::kebab($modelName)); // Plural and kebab-case
@@ -121,6 +171,23 @@ class MakeOrionController extends Command
                 $this->info("✅ Route added to api.php: Orion::resource('{$routeName}', \\{$namespace}\\{$className}::class)->middleware(['auth','web']);");
             } else {
                 $this->error("⚠️ Route already exists in api.php");
+            }
+        }
+
+        // **Ask the user if they want to run migrations**
+        if ($migrationCreated) {
+            if ($this->confirm('Do you want to run php artisan migrate now?', true)) {
+                $this->info("⏳ Running migrations...");
+                $process = new Process(['php', 'artisan', 'migrate']);
+                $process->run();
+
+                if ($process->isSuccessful()) {
+                    $this->info("✅ Migrations executed successfully.");
+                } else {
+                    $this->error("❌ Failed to run migrations: " . $process->getErrorOutput());
+                }
+            } else {
+                $this->info("⚠️ Skipping migrations.");
             }
         }
     }

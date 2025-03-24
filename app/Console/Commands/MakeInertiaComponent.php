@@ -7,8 +7,13 @@ use Illuminate\Filesystem\Filesystem;
 
 class MakeInertiaComponent extends Command
 {
-    protected $signature = 'make:inertia {path}';
-    protected $description = 'Create a new React component at the specified path';
+    protected $signature = 'make:inertia {name}
+                            {--c|--components : Create in Components}
+                            {--l|--layouts : Create in Layouts}
+                            {--s|--sections : Create in Sections}
+                            {--p|--pages : Create in Pages}';
+
+    protected $description = 'Create a new React component with optional folder flag or path';
 
     public function __construct()
     {
@@ -17,37 +22,74 @@ class MakeInertiaComponent extends Command
 
     public function handle()
     {
-        $path = $this->argument('path');
+        $name = $this->argument('name');
         $filesystem = new Filesystem();
 
-        // Ensure the path is relative to the resources/js directory
-        $componentPath = resource_path("js/{$path}.jsx");
+        // Extract folder and component name correctly
+        $folder = $this->getFolder($name);
+        $componentName = basename($name);
 
-        if ($filesystem->exists($componentPath)) {
-            $this->error("⚠️ Component at {$path} already exists!");
+        // Determine the final path properly
+        $componentPath = resource_path("js/{$folder}/{$name}.jsx");
+
+        // Prevent duplicate folder nesting
+        $cleanPath = str_replace("/{$folder}/{$folder}", "/{$folder}", $componentPath);
+
+        if ($filesystem->exists($cleanPath)) {
+            $this->error("⚠️ Component {$componentName} already exists in {$folder}!");
             return;
         }
-        $filesystem->ensureDirectoryExists(dirname($componentPath));
-        $filesystem->put($componentPath, $this->getComponentTemplate(basename($path)));
-        $this->info("✅ React component created successfully at {$componentPath}.");
-        $this->openFile($componentPath);
+
+        $filesystem->ensureDirectoryExists(dirname($cleanPath));
+        $filesystem->put($cleanPath, $this->getComponentTemplate($componentName));
+
+        $this->info("✅ React component created successfully at: {$cleanPath}");
+        $this->openFile($cleanPath);
     }
+
+    /**
+     * Determine the target folder (flag or path-based)
+     */
+    protected function getFolder($name)
+    {
+        if ($this->option('components')) {
+            return 'Components';
+        } elseif ($this->option('layouts')) {
+            return 'Layouts';
+        } elseif ($this->option('sections')) {
+            return 'Sections';
+        } elseif ($this->option('pages')) {
+            return 'Pages';
+        }
+
+        // If no flag is provided, use the first part of the path as folder
+        $parts = explode('/', $name);
+        return (count($parts) > 1) ? $parts[0] : 'Components';
+    }
+
+    /**
+     * Generate the component template with the correct name
+     */
     protected function getComponentTemplate($name)
     {
         return <<<JSX
-        import React from 'react';
+import React from 'react';
 
-        const {$name} = () => {
-            return (
-                <div>
-                    {/* {$name} component */}
-                </div>
-            );
-        };
+const {$name} = () => {
+    return (
+        <div>
+            {/* {$name} component */}
+        </div>
+    );
+};
 
-        export default {$name};
-        JSX;
+export default {$name};
+JSX;
     }
+
+    /**
+     * Open the created file in the default editor
+     */
     protected function openFile($filePath)
     {
         if (PHP_OS_FAMILY === 'Windows') {
