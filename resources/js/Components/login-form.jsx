@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import InputError from "@/Components/InputError";
 
 export function LoginForm({ className, ...props }) {
     return (
@@ -27,6 +28,10 @@ export function LoginForm({ className, ...props }) {
                                     placeholder="m@example.com"
                                     required
                                 />
+                                <InputError
+                                    message={errors.email}
+                                    className="mt-2"
+                                />
                             </div>
                             <div className="grid gap-2">
                                 <div className="flex items-center">
@@ -39,6 +44,10 @@ export function LoginForm({ className, ...props }) {
                                     </a>
                                 </div>
                                 <Input id="password" type="password" required />
+                                <InputError
+                                    message={errors.password}
+                                    className="mt-2"
+                                />
                             </div>
                             <Button type="submit" className="w-full">
                                 Login

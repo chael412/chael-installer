@@ -55,6 +55,7 @@ export default function Login({ status, canResetPassword }) {
                             autoComplete="username"
                             onChange={(e) => setData("email", e.target.value)}
                         />
+                        <InputError message={errors.email} className="mt-2" />
                     </div>
                     <div className="grid gap-2">
                         <div className="flex items-center">
@@ -77,6 +78,10 @@ export default function Login({ status, canResetPassword }) {
                             onChange={(e) =>
                                 setData("password", e.target.value)
                             }
+                        />
+                        <InputError
+                            message={errors.password}
+                            className="mt-2"
                         />
                     </div>
                     <div className="mt-3 mb-1 block">
